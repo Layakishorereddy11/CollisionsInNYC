@@ -1,0 +1,195 @@
+---
+title: '10: Statistical analisys'
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .qmd
+      format_name: quarto
+      format_version: '1.0'
+      jupytext_version: 1.16.1
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+```{python}
+import warnings
+warnings.filterwarnings('ignore')
+```
+
+```{python}
+ 
+import pandas as pd
+import numpy as np
+import pydeck as pdk
+import plotly.express as px
+from sodapy import Socrata
+import pandas as pd
+# import pandahelper.reports as ph
+from datetime import datetime
+import urllib
+```
+
+```{python}
+dateparse = lambda x: pd.to_datetime(x, format='%Y-%m-%d %H:%M:%S')
+data = pd.read_csv('output/datasets/dataset_cleaned.csv', parse_dates=['date/time'], date_parser=dateparse)
+
+# Check the dtype to ensure conversion
+print(data['date/time'].dtype)
+```
+
+### Dangerous Areas
+Dangerous areas are clusters of collisions with a high number of injuries and deaths from vehicle collisions. Clusters were identified by tuning a density-based clustering algorithm.
+
+```{python}
+import pandas as pd
+from sklearn.cluster import DBSCAN
+import folium
+import os
+from folium.plugins import FastMarkerCluster
+# Assuming 'serious' collisions are those with injuries or fatalities
+serious = data[(data['number_of_persons_injured'] > 0) | (data['number_of_persons_killed'] > 0)].copy()
+
+# Prepare data for clustering
+serious['latitude'] = pd.to_numeric(serious['latitude'], errors='coerce')
+serious['longitude'] = pd.to_numeric(serious['longitude'], errors='coerce')
+serious.dropna(subset=['latitude', 'longitude'], inplace=True)  # Remove any rows without valid lat/long data
+
+# DBSCAN Clustering
+dbscan_model = DBSCAN(eps=0.0008, min_samples=50, metric="euclidean")
+serious['cluster'] = dbscan_model.fit_predict(serious[['latitude', 'longitude']])
+
+# Calculate cluster danger scores based on injuries and fatalities
+SERIOUS_CLUSTERS = 200  # number of most dangerous clusters to identify
+FATALITY_MULTIPLE = 10  # weight assigned to fatalities relative to injuries
+
+serious['injured'] = serious['number_of_persons_injured']
+serious['killed'] = serious['number_of_persons_killed']
+cluster_groupby = serious[serious['cluster'] > -1].groupby('cluster')[['injured', 'killed']].sum()
+cluster_groupby['danger'] = cluster_groupby['injured'] + (cluster_groupby['killed'] * FATALITY_MULTIPLE)
+top_clusters = cluster_groupby.nlargest(SERIOUS_CLUSTERS, 'danger').index.tolist()
+```
+
+```{python}
+# Create a Folium map centered around an average location
+map_center = [serious['latitude'].mean(), serious['longitude'].mean()]
+cluster_map = folium.Map(location=map_center, zoom_start=12, tiles='OpenStreetMap')
+
+# Select data for mapping and ensure data is appropriate for passing to Folium
+cluster_mask = serious['cluster'].isin(top_clusters)
+fields_to_use = ['latitude', 'longitude', 'crash_date', 'crash_time', 'injured', 'killed', 'cluster']
+cluster_map_data = serious.loc[cluster_mask, fields_to_use]
+
+# Converting date and time to string for JavaScript
+cluster_map_data['crash_date'] = cluster_map_data['crash_date'].astype(str)
+cluster_map_data['crash_time'] = cluster_map_data['crash_time'].astype(str)
+
+# JavaScript callback for custom markers
+js_callback = """
+function (row) {
+    var icon = L.AwesomeMarkers.icon({
+        icon: 'info-sign',
+        markerColor: 'red',
+        prefix: 'glyphicon'
+    });
+    var marker = L.marker(new L.LatLng(row[0], row[1]), {icon: icon});
+    var popup = L.popup().setContent('<b>Date:</b> ' + row[2] + '<br><b>Time:</b> ' + row[3] + '<br><b>Injured:</b> ' + row[4] + '<br><b>Killed:</b> ' + row[5] + '<br><b>Cluster ID:</b> ' + row[6]);
+    marker.bindPopup(popup);
+    return marker;
+}
+"""
+folium.plugins.FastMarkerCluster(data=cluster_map_data.values.tolist(), callback=js_callback).add_to(cluster_map)
+
+# Save and show the map
+IMG_DIR = "output/hotspots"
+os.makedirs(IMG_DIR, exist_ok=True)
+cluster_map.save(os.path.join(IMG_DIR, "serious_clusters_map.html"))
+
+# Display the map if in a Jupyter notebook
+cluster_map
+```
+
+### Dangerous Areas for Pedestrians and Cyclists
+Dangerous areas for pedestrians and cyclists are clusters of collisions with a high number of pedestrian / cyclist injuries and deaths from vehicle collisions. Clusters were identified by tuning a density-based clustering algorithm.
+
+```{python}
+import pandas as pd
+from sklearn.cluster import DBSCAN
+import folium
+import os
+
+# Load your dataset if not already loaded
+# data = pd.read_csv('path_to_your_file.csv')  # Uncomment and set path if needed
+
+# Define non-motorist collisions based on specific conditions
+non_motorist = data[
+    (data['number_of_pedestrians_injured'] > 0) |
+    (data['number_of_cyclist_injured'] > 0) |
+    (data['number_of_pedestrians_killed'] > 0) |
+    (data['number_of_cyclist_killed'] > 0)
+].copy()
+
+# Prepare latitude and longitude for clustering
+non_motorist['latitude'] = pd.to_numeric(non_motorist['latitude'], errors='coerce')
+non_motorist['longitude'] = pd.to_numeric(non_motorist['longitude'], errors='coerce')
+non_motorist.dropna(subset=['latitude', 'longitude'], inplace=True)
+
+# Parameters for DBSCAN
+eps = 0.0005  # Smaller neighborhood size
+min_samples = 5  # Minimum samples in a neighborhood to form a cluster
+
+# Perform DBSCAN clustering
+dbscan_model = DBSCAN(eps=eps, min_samples=min_samples, metric="euclidean")
+non_motorist['cluster'] = dbscan_model.fit_predict(non_motorist[['latitude', 'longitude']])
+
+# Calculate danger scores based on the injuries and fatalities of non-motorists
+FATALITY_MULTIPLE = 10  # Weight assigned to fatalities relative to injuries
+non_motorist['danger'] = (
+    non_motorist['number_of_pedestrians_injured'] +
+    non_motorist['number_of_cyclist_injured'] +
+    (non_motorist['number_of_pedestrians_killed'] * FATALITY_MULTIPLE) +
+    (non_motorist['number_of_cyclist_killed'] * FATALITY_MULTIPLE)
+)
+
+# Sum danger scores within clusters and identify top clusters
+cluster_groupby = non_motorist[non_motorist['cluster'] > -1].groupby('cluster')['danger'].sum()
+top_clusters = cluster_groupby.nlargest(200).index.tolist()
+
+# Select data for visualization
+cluster_mask = non_motorist['cluster'].isin(top_clusters)
+fields_to_use = ['latitude', 'longitude', 'crash_date', 'crash_time', 'number_of_pedestrians_injured', 'number_of_cyclist_injured', 'number_of_pedestrians_killed', 'number_of_cyclist_killed', 'cluster']
+cluster_map_data = non_motorist.loc[cluster_mask, fields_to_use]
+
+# Convert datetime fields to string for JavaScript compatibility
+cluster_map_data['crash_date'] = cluster_map_data['crash_date'].astype(str)
+cluster_map_data['crash_time'] = cluster_map_data['crash_time'].astype(str)
+
+# Create a Folium map centered around the average location
+NYC_MAP_CENTER = [non_motorist['latitude'].mean(), non_motorist['longitude'].mean()]
+nm_cluster_map = folium.Map(location=NYC_MAP_CENTER, zoom_start=12, tiles='OpenStreetMap')
+
+# JavaScript callback for custom markers in Folium
+js_callback = """
+function (row) {
+    var icon = L.AwesomeMarkers.icon({
+        icon: 'info-sign',
+        markerColor: 'red',
+        prefix: 'glyphicon'
+    });
+    var marker = L.marker(new L.LatLng(row[0], row[1]), {icon: icon});
+    var popup = L.popup().setContent('<b>Date:</b> ' + row[2] + '<br><b>Time:</b> ' + row[3] + '<br><b>Pedestrians Injured:</b> ' + row[4] + '<br><b>Cyclists Injured:</b> ' + row[5] + '<br><b>Pedestrians Killed:</b> ' + row[6] + '<br><b>Cyclists Killed:</b> ' + row[7] + '<br><b>Cluster ID:</b> ' + row[8]);
+    marker.bindPopup(popup);
+    return marker;
+}
+"""
+folium.plugins.FastMarkerCluster(data=cluster_map_data.values.tolist(), callback=js_callback).add_to(nm_cluster_map)
+
+# Save the map to an output directory
+IMG_DIR = "output/hotspots"
+os.makedirs(IMG_DIR, exist_ok=True)
+nm_cluster_map.save(os.path.join(IMG_DIR, "clusters_non_motor_map.html"))
+
+# Display the map if in a Jupyter notebook
+nm_cluster_map
+```

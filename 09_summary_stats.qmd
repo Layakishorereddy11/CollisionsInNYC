@@ -1,0 +1,134 @@
+---
+title: '9: Summary statistics'
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .qmd
+      format_name: quarto
+      format_version: '1.0'
+      jupytext_version: 1.16.1
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+In analyzing the New York City Motor Vehicle Collision dataset, several summary statistics can provide insights into the nature and impact of collisions across the city. Here are some meaningful summary statistics for this dataset we are planing to explore:
+
+1.  **Average Number of Collisions Per Day:** This statistic helps understand the daily frequency of collisions, providing a baseline for identifying days with unusually high or low numbers of incidents. It’s a key indicator of overall traffic safety.
+
+2.  **Median Number of Persons Injured in Collisions:** The median gives a better sense of the typical collision severity by showing the middle value of injuries in all reported collisions. It’s less influenced by extreme values than the mean, making it a reliable measure of typical outcomes.
+
+3.  **Percentiles for Number of Fatalities in Collisions** Percentiles (such as the 90th, 95th, and 99th) for fatalities can help identify the severity distribution of the most lethal collisions. Understanding the tail of this distribution is crucial for targeted interventions on the most dangerous incidents.
+
+4.  **Average Number of Pedestrians, Cyclists, and Motorists Involved in Collisions** Breaking down the average number of pedestrians, cyclists, and motorists involved in collisions can highlight which road users are most at risk. This can inform targeted safety campaigns or infrastructure improvements.
+
+------------------------------------------------------------------------
+
+```{python}
+import warnings
+warnings.filterwarnings('ignore')
+```
+
+```{python}
+import pandas as pd
+
+# Load the dataset
+data_path = 'output/datasets/dataset_cleaned.csv'
+data = pd.read_csv(data_path)
+
+
+# Display basic summary statistics for numerical columns
+summary_stats = data.describe()
+
+# Displaying the results
+print(summary_stats)
+```
+
+```{python}
+mean_injuries = data['number_of_persons_injured'].mean()
+median_injuries = data['number_of_persons_injured'].median()
+print("Mean number of persons injured:", mean_injuries)
+print("Median number of persons injured:", median_injuries)
+```
+
+```{python}
+import plotly.express as px
+
+# Plotting the number of persons injured in each incident
+fig = px.histogram(data, x='number_of_persons_injured', title='Distribution of Persons Injured per Incident')
+fig.show()
+```
+
+```{python}
+# Plotting incidents over time, assuming 'date/time' is properly formatted and cleaned
+fig_time = px.histogram(data, x='date/time', title='Distribution of Incidents Over Time')
+fig_time.show()
+```
+
+Average Number of Collisions Per Day: This statistic helps understand the daily frequency of collisions, providing a baseline for identifying days with unusually high or low numbers of incidents. It’s a key indicator of overall traffic safety.
+
+```{python}
+data['date/time'] = pd.to_datetime(data['date/time'], errors='coerce')
+print(data['date/time'].dtype)
+import pandas as pd
+
+# Assuming 'data' has been loaded and 'date/time' converted to datetime
+# Group by date component of 'date/time'
+daily_collisions = data.groupby(data['date/time'].dt.date).size()
+
+# Calculate the average number of collisions per day
+average_collisions_per_day = daily_collisions.mean()
+print("Average Number of Collisions Per Day:", average_collisions_per_day)
+```
+
+```{python}
+import matplotlib.pyplot as plt
+
+plt.figure(figsize=(10, 5))
+plt.plot(daily_collisions.index, daily_collisions, marker='o', linestyle='-')
+plt.title('Daily Collisions Over Time')
+plt.xlabel('Date')
+plt.ylabel('Number of Collisions')
+plt.grid(True)
+plt.xticks(rotation=45)  # Rotate date labels for better readability
+plt.tight_layout()
+plt.show()
+```
+
+Median Number of Persons Injured in Collisions: The median gives a better sense of the typical collision severity by showing the middle value of injuries in all reported collisions. It’s less influenced by extreme values than the mean, making it a reliable measure of typical outcomes.
+
+```{python}
+median_injuries = data['number_of_persons_injured'].median()
+print("Median Number of Persons Injured in Collisions:", median_injuries)
+```
+
+Percentiles for Number of Fatalities in Collisions Percentiles (such as the 90th, 95th, and 99th) for fatalities can help identify the severity distribution of the most lethal collisions. Understanding the tail of this distribution is crucial for targeted interventions on the most dangerous incidents.
+
+```{python}
+fatalities_percentiles = data['number_of_persons_killed'].quantile([0.90, 0.95, 0.99])
+print("Fatalities at 90th, 95th, and 99th Percentiles:", fatalities_percentiles)
+```
+
+Average Number of Pedestrians, Cyclists, and Motorists Involved in Collisions Breaking down the average number of pedestrians, cyclists, and motorists involved in collisions can highlight which road users are most at risk. This can inform targeted safety campaigns or infrastructure improvements.
+
+```{python}
+avg_pedestrians = data['number_of_pedestrians_injured'].mean()
+avg_cyclists = data['number_of_cyclist_injured'].mean()
+avg_motorists = data['number_of_motorist_injured'].mean()
+
+print("Average Number of Pedestrians Involved in Collisions:", avg_pedestrians)
+print("Average Number of Cyclists Involved in Collisions:", avg_cyclists)
+print("Average Number of Motorists Involved in Collisions:", avg_motorists)
+```
+
+```{python}
+avg_data = {
+    'Category': ['Pedestrians', 'Cyclists', 'Motorists'],
+    'Average Involved': [avg_pedestrians, avg_cyclists, avg_motorists]
+}
+avg_df = pd.DataFrame(avg_data)
+
+fig_bar = px.bar(avg_df, x='Category', y='Average Involved', title='Average Number of Pedestrians, Cyclists, and Motorists Involved in Collisions')
+fig_bar.show()
+```

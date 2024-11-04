@@ -1,0 +1,137 @@
+---
+title: '4: Data enrichment'
+editor:
+  markdown:
+    wrap: 72
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .qmd
+      format_name: quarto
+      format_version: '1.0'
+      jupytext_version: 1.16.1
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+```{python}
+import warnings
+warnings.filterwarnings('ignore')
+```
+
+```{python}
+ 
+import pandas as pd
+import numpy as np
+import pydeck as pdk
+import plotly.express as px
+from sodapy import Socrata
+import pandas as pd
+# import pandahelper.reports as ph
+from datetime import datetime
+import urllib
+```
+
+```{python}
+data = pd.read_csv('output/datasets/dataset.csv')
+```
+
+```{python}
+import pandas as pd
+
+def scrub_data(df: pd.DataFrame) -> pd.DataFrame:
+    # Parse Date and Time
+    df['crash_date'] = pd.to_datetime(df['crash_date']).dt.date  # Ensures only the date part is considered
+
+    # Handling crash_time to ensure only time is considered
+    # Assuming 'crash_time' might also include full datetime, we need to isolate the time part.
+    if df['crash_time'].str.contains(':').all():  # Simple check if format includes hours and minutes
+        df['crash_time'] = pd.to_datetime(df['crash_time'], errors='coerce').dt.time
+    else:
+        df['crash_time'] = pd.to_datetime(df['crash_time'], format='%H:%M', errors='coerce').dt.time
+
+    # Combine date and time into a single datetime column
+    df['date/time'] = pd.to_datetime(df['crash_date'].astype(str) + ' ' + df['crash_time'].astype(str))
+
+    # Drop rows with NaN in 'latitude' and 'longitude'
+    df.dropna(subset=['latitude', 'longitude'], inplace=True)
+
+    # Rename columns: make lowercase and replace spaces with underscores
+    df.rename(str.lower, axis='columns', inplace=True)
+    df.columns = df.columns.str.replace(' ', '_')
+
+    # Convert strings to numerical data where applicable
+    numeric_cols = ['number_of_persons_injured', 'number_of_pedestrians_injured', 'number_of_cyclist_injured',
+                    'number_of_motorist_injured', 'number_of_persons_killed', 'number_of_pedestrians_killed',
+                    'number_of_cyclist_killed', 'number_of_motorist_killed']
+    df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors='coerce')
+    df[['latitude', 'longitude']] = df[['latitude', 'longitude']].apply(pd.to_numeric, errors='coerce')
+
+    # Filter data to include only NYC metro area
+    nyc_bounds = {
+        'latitude_min': 40.4, 'latitude_max': 41.0,
+        'longitude_min': -74.3, 'longitude_max': -73.7
+    }
+    df = df[(df['latitude'].between(nyc_bounds['latitude_min'], nyc_bounds['latitude_max'])) &
+            (df['longitude'].between(nyc_bounds['longitude_min'], nyc_bounds['longitude_max']))]
+    
+    return df
+```
+
+```{python}
+data = scrub_data(data)
+```
+
+```{python}
+import pandas as pd
+
+# Assuming 'data' is your DataFrame
+# Convert date and time into a single datetime column
+try:
+    # Direct column assignment to handle future deprecation issues
+    data['date/time'] = pd.to_datetime(data['crash_date'].astype(str) + ' ' + data['crash_time'].astype(str))
+    print("Datetime conversion successful")
+except Exception as e:
+    print("Datetime conversion failed:", e)
+
+# Define collision categories directly
+data['total_collisions'] = 1
+data['serious_collisions'] = ((data['number_of_persons_injured'] > 0) | (data['number_of_persons_killed'] > 0)).astype(int)
+data['collisions_with_pedestrians_cyclists'] = ((data['number_of_pedestrians_injured'] > 0) |
+                                                (data['number_of_pedestrians_killed'] > 0) |
+                                                (data['number_of_cyclist_injured'] > 0) |
+                                                (data['number_of_cyclist_killed'] > 0)).astype(int)
+
+# Time period categorization
+data['year'] = data['date/time'].dt.year
+data['month_year'] = data['date/time'].dt.to_period('M').astype(str)
+data['week_year'] = data['date/time'].dt.to_period('W').astype(str)
+data['day_year'] = data['date/time'].dt.to_period('D').astype(str)
+
+# Group and aggregate data
+data_yearly = data.groupby('year').agg({
+    'total_collisions': 'sum',
+    'serious_collisions': 'sum',
+    'collisions_with_pedestrians_cyclists': 'sum'
+}).reset_index()
+
+data_monthly = data.groupby('month_year').agg({
+    'total_collisions': 'sum',
+    'serious_collisions': 'sum',
+    'collisions_with_pedestrians_cyclists': 'sum'
+}).reset_index()
+
+data_weekly = data.groupby('week_year').agg({
+    'total_collisions': 'sum',
+    'serious_collisions': 'sum',
+    'collisions_with_pedestrians_cyclists': 'sum'
+}).reset_index()
+
+data_daily = data.groupby('day_year').agg({
+    'total_collisions': 'sum',
+    'serious_collisions': 'sum',
+    'collisions_with_pedestrians_cyclists': 'sum'
+}).reset_index()
+```

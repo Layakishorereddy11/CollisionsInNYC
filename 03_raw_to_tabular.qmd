@@ -1,0 +1,115 @@
+---
+title: '3: From raw to tabular data'
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .qmd
+      format_name: quarto
+      format_version: '1.0'
+      jupytext_version: 1.16.1
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+Here I have extracted 10000000 rows from api, and stored in the pandas dataframe and displayed latest 10 rows below
+
+['crash_date', 'crash_time', 'on_street_name', 'off_street_name',
+       'number_of_persons_injured', 'number_of_persons_killed',
+       'number_of_pedestrians_injured', 'number_of_pedestrians_killed',
+       'number_of_cyclist_injured', 'number_of_cyclist_killed',
+       'number_of_motorist_injured', 'number_of_motorist_killed',
+       'contributing_factor_vehicle_1', 'contributing_factor_vehicle_2',
+       'collision_id', 'vehicle_type_code1', 'vehicle_type_code2', 'borough',
+       'zip_code', 'latitude', 'longitude', 'location', 'cross_street_name',
+       'contributing_factor_vehicle_3', 'vehicle_type_code_3',
+       'contributing_factor_vehicle_4', 'vehicle_type_code_4',
+       'contributing_factor_vehicle_5', 'vehicle_type_code_5']
+
+```{python}
+import warnings
+warnings.filterwarnings('ignore')
+```
+
+```{python}
+ 
+import pandas as pd
+import numpy as np
+import pydeck as pdk
+import plotly.express as px
+from sodapy import Socrata
+import pandas as pd
+# import pandahelper.reports as ph
+from datetime import datetime
+import urllib
+
+def dataloading():
+    query = """
+        SELECT
+            *
+        WHERE
+            crash_date >= '2013'
+        ORDER BY
+            crash_date DESC
+        LIMIT
+            1000000000
+        """
+
+    # format values in the url, easier to read
+    safe_string = urllib.parse.quote_plus(query)
+    print(safe_string)
+
+    # compose url
+    url = 'https://data.cityofnewyork.us/resource/h9gi-nx95.json?$query={}'.format(safe_string)
+    print('url:', url)
+    return url
+```
+
+```{python}
+df = pd.read_json(dataloading())
+
+print(df.shape)
+df.head()
+```
+
+```{python}
+import pandas as pd
+import sqlite3
+import os
+# Save to CSV
+data_DIR = "output/datasets"
+os.makedirs(data_DIR, exist_ok=True)
+df.to_csv('output/datasets/dataset.csv', index=False)
+
+# Save to json
+df.to_json('output/datasets/dataset.json')
+
+#save to sqlite
+data=df.copy()
+for column in data.columns:
+    # Check if any entry in the column is a dictionary
+    if data[column].apply(lambda x: isinstance(x, dict)).any():
+        print(f"Column {column} contains dictionary objects.")
+import json
+
+def serialize_dicts(x):
+    if isinstance(x, dict):
+        return json.dumps(x)
+    return x
+
+# Apply serialization to all columns that might contain dictionary objects
+for column in data.columns:
+    data[column] = data[column].apply(serialize_dicts)
+
+import sqlite3
+
+conn = sqlite3.connect('output/datasets/dataset.db')
+try:
+    data.to_sql('dataset', conn, if_exists='replace', index=False)
+    print("Data saved successfully.")
+except Exception as e:
+    print(f"An error occurred while saving to SQLite: {e}")
+finally:
+    conn.close()
+```

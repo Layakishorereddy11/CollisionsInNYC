@@ -1,0 +1,60 @@
+---
+title: '7: Backup in several formats'
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .qmd
+      format_name: quarto
+      format_version: '1.0'
+      jupytext_version: 1.16.1
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+dataset is backed up into external service using below code we are saving it to csv, json,sqlite3, these codes are already used in 03 and 04
+
+```{python}
+'''
+import pandas as pd
+import sqlite3
+import os
+# Save to CSV
+data_DIR = "output/datasets"
+os.makedirs(data_DIR, exist_ok=True)
+df.to_csv('output/datasets/dataset.csv', index=False)
+
+# Save to json
+df.to_json('output/datasets/dataset.json')
+
+#save to sqlite
+data=df.copy()
+for column in data.columns:
+    # Check if any entry in the column is a dictionary
+    if data[column].apply(lambda x: isinstance(x, dict)).any():
+        print(f"Column {column} contains dictionary objects.")
+import json
+
+def serialize_dicts(x):
+    if isinstance(x, dict):
+        return json.dumps(x)
+    return x
+
+# Apply serialization to all columns that might contain dictionary objects
+for column in data.columns:
+    data[column] = data[column].apply(serialize_dicts)
+
+import sqlite3
+
+conn = sqlite3.connect('output/datasets/dataset.db')
+try:
+    data.to_sql('dataset', conn, if_exists='replace', index=False)
+    print("Data saved successfully.")
+except Exception as e:
+    print(f"An error occurred while saving to SQLite: {e}")
+finally:
+    conn.close()
+
+'''
+```

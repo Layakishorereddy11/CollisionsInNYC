@@ -1,0 +1,111 @@
+---
+title: '6: Test data quality'
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .qmd
+      format_name: quarto
+      format_version: '1.0'
+      jupytext_version: 1.16.1
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+```{python}
+import warnings
+warnings.filterwarnings('ignore')
+```
+
+```{python}
+ 
+import pandas as pd
+import numpy as np
+import pydeck as pdk
+import plotly.express as px
+from sodapy import Socrata
+import pandas as pd
+# import pandahelper.reports as ph
+from datetime import datetime
+import urllib
+```
+
+```{python}
+dateparse = lambda x: pd.to_datetime(x, format='%Y-%m-%d %H:%M:%S')
+data = pd.read_csv('output/datasets/dataset_cleaned.csv', parse_dates=['date/time'], date_parser=dateparse)
+
+# Check the dtype to ensure conversion
+print(data['date/time'].dtype)
+```
+
+```{python}
+data.columns
+```
+
+# Verify No Missing Values in Key Columns:
+
+```{python}
+assert not data['latitude'].isnull().any(), "Latitude contains null values"
+assert not data['longitude'].isnull().any(), "Longitude contains null values"
+assert not data['date/time'].isnull().any(), "Date/time contains null values"
+```
+
+# Check for Reasonable Number of Rows:
+
+```{python}
+assert len(data) > 0, "No rows found after cleaning"
+assert len(data) > 100, "Data might be too limited"
+```
+
+# Test Data Type Integrity:
+
+```{python}
+assert pd.api.types.is_numeric_dtype(data['number_of_persons_injured']), "Number of persons injured is not numeric"
+assert pd.api.types.is_datetime64_any_dtype(data['date/time']), "Date/time is not a datetime type"
+```
+
+# Geographical Bounds Check:
+
+```{python}
+assert data['latitude'].between(40.4, 41.0).all(), "Latitude out of NYC bounds"
+assert data['longitude'].between(-74.3, -73.7).all(), "Longitude out of NYC bounds"
+```
+
+#  Pytest(Created a new file test_06.py for pytest using below code)
+
+```{python}
+import pytest
+import pandas as pd
+from functions import scrub_data
+
+import warnings
+
+# Suppress specific deprecation warnings from libraries you do not control
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="plotly.*")
+
+
+@pytest.fixture
+def data():
+    # Load the DataFrame from a CSV or define it directly
+    df = pd.read_csv('output/datasets/dataset.csv',low_memory=False)
+    # Apply any necessary preprocessing you typically use before tests
+    df = scrub_data(df)  # Assuming 'scrub_data' is a function you use to clean data
+    return df
+
+
+def test_no_missing_values(data):  # 'data' fixture is used here
+    for column in ['latitude', 'longitude', 'date/time']:
+        assert not data[column].isnull().any(), f"{column} contains null values"
+
+def test_reasonable_number_of_rows(data):
+    assert len(data) > 100, "Data might be too limited after cleaning"
+
+def test_data_types(data):
+    assert pd.api.types.is_numeric_dtype(data['number_of_persons_injured']), "Number of persons injured is not numeric"
+    assert pd.api.types.is_datetime64_any_dtype(data['date/time']), "Date/time is not a datetime type"
+
+def test_geographical_bounds(data):
+    assert data['latitude'].between(40.4, 41.0).all(), "Latitude out of NYC bounds"
+    assert data['longitude'].between(-74.3, -73.7).all(), "Longitude out of NYC bounds"
+```

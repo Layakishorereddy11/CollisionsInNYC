@@ -1,0 +1,53 @@
+---
+title: '8: External services'
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .qmd
+      format_name: quarto
+      format_version: '1.0'
+      jupytext_version: 1.16.1
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+```{python}
+'''
+from google.cloud import storage
+
+def upload_to_gcs(bucket_name, source_file_name, destination_blob_name):
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(destination_blob_name)
+
+    blob.upload_from_filename(source_file_name)
+    print(f"File {source_file_name} uploaded to {destination_blob_name}.")
+
+# Usage
+upload_to_gcs('your-bucket-name', '/path/to/your/dataset.csv', 'dataset_backup.csv')
+'''
+```
+
+```{python}
+'''
+from azure.storage.blob import BlobServiceClient, BlobClient, ContainerClient, __version__
+
+def upload_to_azure(blob_service_client, container_name, file_path, blob_name):
+    try:
+        blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
+        with open(file_path, "rb") as data:
+            blob_client.upload_blob(data, overwrite=True)
+            print(f"File {file_path} uploaded to {blob_name}.")
+    except Exception as ex:
+        print(f"An error occurred: {ex}")
+
+# Initialize a BlobServiceClient
+connect_str = 'your-azure-connection-string'
+blob_service_client = BlobServiceClient.from_connection_string(connect_str)
+
+# Usage
+upload_to_azure(blob_service_client, 'your-container-name', '/path/to/your/dataset.csv', 'dataset_backup.csv')
+'''
+```

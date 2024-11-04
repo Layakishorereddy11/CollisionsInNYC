@@ -1,0 +1,11 @@
+---
+title: "Team 13"
+---
+The "NYC Vehicle Collisions" investigates the patterns of vehicle collisions in New York City, with a special focus on accidents involving pedestrians and cyclists and collisions. Using NYPD collision data and precinct shapefiles, the project analyzes where and when these incidents occur most frequently, presenting findings through maps and other visualizations including interactivity. The goal is to identify high-risk areas and suggest improvements.
+# Team members
+
+Group member (netid and name).
+
+- Bhavana Vemula bv234
+- Layakishore Reddy Desireddy ld786
+- Vikram Sriram Yasaswi Sagaram vs865 

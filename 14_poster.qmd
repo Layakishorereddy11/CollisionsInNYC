@@ -1,0 +1,18 @@
+---
+title: "14: Poster"
+format: 
+  html:
+    code-tools: true
+css: button-style.css
+embed-resources: true
+---
+## Downloading Poster.pdf file
+
+{{<downloadthis Poster_Group_13.pdf dname="Poster_Group_13" label="Download the Poster" icon="file-earmark-pdf" type="success" >}}
+
+
+```{python}
+from IPython.display import Image
+
+Image(filename='Poster_Group_13.png')
+```

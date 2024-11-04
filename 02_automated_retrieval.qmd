@@ -1,0 +1,49 @@
+---
+title: '2: Retrieval of raw data'
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .qmd
+      format_name: quarto
+      format_version: '1.0'
+      jupytext_version: 1.16.1
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+```{python}
+ 
+import pandas as pd
+import numpy as np
+import pydeck as pdk
+import plotly.express as px
+from sodapy import Socrata
+import pandas as pd
+# import pandahelper.reports as ph
+from datetime import datetime
+import urllib
+```
+
+```{python}
+def dataloading():
+    query = """
+        SELECT
+            *
+        WHERE
+            crash_date >= '2018'
+        ORDER BY
+            crash_date DESC
+        
+        """
+
+    # format values in the url, easier to read
+    safe_string = urllib.parse.quote_plus(query)
+    print(safe_string)
+
+    # compose url
+    url = 'https://data.cityofnewyork.us/resource/h9gi-nx95.json?$query={}'.format(safe_string)
+    print('url:', url)
+    return url
+```

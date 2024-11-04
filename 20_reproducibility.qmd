@@ -1,0 +1,26 @@
+---
+title: '20: Reproducibility'
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .qmd
+      format_name: quarto
+      format_version: '1.0'
+      jupytext_version: 1.16.1
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+Using below commands I have automatically generated a requirements.txt file for this project, using this file we can install all the required packages to run the codes.
+pip3 install pipreqs
+pip3 install pip-tools
+pipreqs --savepath=requirements.in && pip-compile
+
+install all the libraries from below command
+
+pip install -r requirements.txt
+
+then run all qmds in the order to reproduce the results
+

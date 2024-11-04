@@ -1,0 +1,875 @@
+---
+title: '13: interactivity'
+format: dashboard
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .qmd
+      format_name: quarto
+      format_version: '1.0'
+      jupytext_version: 1.16.1
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+# Trends
+
+## Row {height=50%}
+
+```{python}
+#| title: Traffic Collision Data
+import warnings
+warnings.filterwarnings('ignore')
+ 
+import pandas as pd
+import numpy as np
+import pydeck as pdk
+import plotly.express as px
+from sodapy import Socrata
+import pandas as pd
+# import pandahelper.reports as ph
+from datetime import datetime
+import urllib
+import os
+dateparse = lambda x: pd.to_datetime(x, format='%Y-%m-%d %H:%M:%S')
+data1 = pd.read_csv('output/datasets/dataset_cleaned.csv', parse_dates=['date/time'], date_parser=dateparse)
+
+# Check the dtype to ensure conversion
+
+
+
+import pandas as pd
+
+data=data1.copy()
+
+data.loc[:, 'date/time'] = pd.to_datetime(data['crash_date'].astype(str) + ' ' + data['crash_time'].astype(str))
+   
+
+    
+
+# Define collision categories explicitly with .loc
+data.loc[:, 'total_collisions'] = 1
+data.loc[:, 'serious_collisions'] = ((data['number_of_persons_injured'] > 0) | (data['number_of_persons_killed'] > 0)).astype(int)
+data.loc[:, 'collisions_with_pedestrians_cyclists'] = ((data['number_of_pedestrians_injured'] > 0) |
+                                                      (data['number_of_pedestrians_killed'] > 0) |
+                                                      (data['number_of_cyclist_injured'] > 0) |
+                                                      (data['number_of_cyclist_killed'] > 0)).astype(int)
+
+# Aggregate data for different time periods
+data.loc[:, 'year'] = data['date/time'].dt.year
+data.loc[:, 'month_year'] = data['date/time'].dt.to_period('M').astype(str)
+data.loc[:, 'week_year'] = data['date/time'].dt.to_period('W').astype(str)
+data.loc[:, 'day_year'] = data['date/time'].dt.to_period('D').astype(str)
+
+# Group and aggregate data
+data_yearly = data.groupby('year').agg({
+    'total_collisions': 'sum',
+    'serious_collisions': 'sum',
+    'collisions_with_pedestrians_cyclists': 'sum'
+}).reset_index()
+
+data_monthly = data.groupby('month_year').agg({
+    'total_collisions': 'sum',
+    'serious_collisions': 'sum',
+    'collisions_with_pedestrians_cyclists': 'sum'
+}).reset_index()
+
+data_weekly = data.groupby('week_year').agg({
+    'total_collisions': 'sum',
+    'serious_collisions': 'sum',
+    'collisions_with_pedestrians_cyclists': 'sum'
+}).reset_index()
+
+data_daily = data.groupby('day_year').agg({
+    'total_collisions': 'sum',
+    'serious_collisions': 'sum',
+    'collisions_with_pedestrians_cyclists': 'sum'
+}).reset_index()
+
+import plotly.graph_objects as go
+
+# Function to create a plot with customizations
+def create_plot():
+    # Create an empty figure
+    fig = go.Figure()
+
+    # Define initial data (yearly data as default)
+    initial_data = data_yearly
+
+    # Add traces for each type of collision
+    fig.add_trace(go.Bar(
+        x=initial_data['year'], y=initial_data['total_collisions'],
+        name='Total Collisions',
+        marker_color='rgba(55, 83, 109, 0.8)',  # dark blue
+        text=initial_data['total_collisions'],  # Add text on bars
+        textposition='outside'  # Position text outside of bars
+    ))
+    fig.add_trace(go.Bar(
+        x=initial_data['year'], y=initial_data['serious_collisions'],
+        name='Serious Collisions',
+        marker_color='rgba(255, 133, 27, 0.8)',  # bright orange
+        text=initial_data['serious_collisions'],  # Add text on bars
+        textposition='outside'  # Position text outside of bars
+    ))
+    fig.add_trace(go.Bar(
+        x=initial_data['year'], y=initial_data['collisions_with_pedestrians_cyclists'],
+        name='Collisions with Pedestrians and Cyclists',
+        marker_color='rgba(50, 171, 96, 0.8)',  # green
+        text=initial_data['collisions_with_pedestrians_cyclists'],  # Add text on bars
+        textposition='outside'  # Position text outside of bars
+    ))
+
+    # Update layout with dropdown
+    fig.update_layout(
+        title='Traffic Collision Data - Yearly View',
+        xaxis_title='Year',
+        yaxis_title='Number of Collisions',
+        barmode='group',
+        legend_title='Types of Collisions',
+        plot_bgcolor='white',
+        width=1200,
+        height=600,
+        updatemenus=[
+            dict(
+                buttons=list([
+                    dict(args=[{'x': [data_yearly['year'].astype(str)], 'y': [data_yearly[col] for col in ['total_collisions', 'serious_collisions', 'collisions_with_pedestrians_cyclists']],
+                               'text': [data_yearly[col] for col in ['total_collisions', 'serious_collisions', 'collisions_with_pedestrians_cyclists']]}],
+                         label="Yearly",
+                         method="restyle"),
+                    dict(args=[{'x': [data_monthly['month_year']], 'y': [data_monthly[col] for col in ['total_collisions', 'serious_collisions', 'collisions_with_pedestrians_cyclists']],
+                               'text': [data_monthly[col] for col in ['total_collisions', 'serious_collisions', 'collisions_with_pedestrians_cyclists']]}],
+                         label="Monthly",
+                         method="restyle"),
+                    dict(args=[{'x': [data_weekly['week_year']], 'y': [data_weekly[col] for col in ['total_collisions', 'serious_collisions', 'collisions_with_pedestrians_cyclists']],
+                               'text': [data_weekly[col] for col in ['total_collisions', 'serious_collisions', 'collisions_with_pedestrians_cyclists']]}],
+                         label="Weekly",
+                         method="restyle"),
+                    dict(args=[{'x': [data_daily['day_year']], 'y': [data_daily[col] for col in ['total_collisions', 'serious_collisions', 'collisions_with_pedestrians_cyclists']],
+                               'text': [data_daily[col] for col in ['total_collisions', 'serious_collisions', 'collisions_with_pedestrians_cyclists']]}],
+                         label="Daily",
+                         method="restyle")
+                ]),
+                direction="down",
+                pad={"r": 10, "t": 10},
+                showactive=True,
+                x=0.1,
+                xanchor="left",
+                y=1.15,
+                yanchor="top"
+            ),
+        ]
+    )
+
+    return fig
+fig = create_plot()
+
+# Generate and show the plot
+
+
+fig.show()
+```
+
+```{python}
+#| title: Monthly Collision Data Across All Years
+import pandas as pd
+import plotly.express as px
+
+# Load the data
+data = data1.copy()
+
+# Convert 'date/time' to datetime if necessary
+data['date/time'] = pd.to_datetime(data['date/time'], errors='coerce')
+
+# Ensure the additional columns are in place
+data['total_collisions'] = 1
+data['serious_collisions'] = ((data['number_of_persons_injured'] > 0) | (data['number_of_persons_killed'] > 0)).astype(int)
+data['collisions_with_pedestrians_cyclists'] = ((data['number_of_pedestrians_injured'] > 0) |
+                                                (data['number_of_pedestrians_killed'] > 0) |
+                                                (data['number_of_cyclist_injured'] > 0) |
+                                                (data['number_of_cyclist_killed'] > 0)).astype(int)
+# Extract month from 'date/time' for grouping
+data['month'] = data['date/time'].dt.month
+
+# Group by month and sum the collisions
+monthly_data = data.groupby('month').agg({
+    'total_collisions': 'sum',
+    'serious_collisions': 'sum',
+    'collisions_with_pedestrians_cyclists': 'sum'
+}).reset_index()
+
+# Convert 'month' from numbers to names for better readability
+import calendar
+monthly_data['month'] = monthly_data['month'].apply(lambda x: calendar.month_abbr[x])
+
+# Define color map for the different collision types
+color_map = {
+    'total_collisions': 'pink',  # yellow for total collisions
+    'serious_collisions': 'red',  # Red for serious collisions
+    'collisions_with_pedestrians_cyclists': 'green'  # Green for collisions involving pedestrians/cyclists
+}
+
+import plotly.express as px
+
+fig = px.bar(monthly_data, 
+             x='month', 
+             y=['total_collisions', 'serious_collisions', 'collisions_with_pedestrians_cyclists'],
+             barmode='group', 
+             title='Monthly Collision Data Across All Years',
+             color_discrete_map=color_map)
+
+fig.update_layout(
+    xaxis_title='Month',
+    yaxis_title='Number of Collisions',
+    legend_title='Collision Type'
+)
+```
+
+## Row {height=50%}
+
+```{python}
+#| title: Weekly Collision Data
+import pandas as pd
+import plotly.express as px
+
+
+# Extract day of the week from 'date/time' (0=Monday, 6=Sunday)
+data['day_of_week'] = data['date/time'].dt.dayofweek
+
+# Map integers to day names for better readability
+day_names = {0: 'Monday', 1: 'Tuesday', 2: 'Wednesday', 3: 'Thursday', 4: 'Friday', 5: 'Saturday', 6: 'Sunday'}
+data['day_of_week'] = data['day_of_week'].map(day_names)
+
+# Group by day of the week and sum the collisions
+weekly_data = data.groupby('day_of_week').agg({
+    'total_collisions': 'sum',
+    'serious_collisions': 'sum',
+    'collisions_with_pedestrians_cyclists': 'sum'
+}).reset_index()
+
+# To ensure the days are in the correct order
+weekly_data['day_of_week'] = pd.Categorical(weekly_data['day_of_week'], categories=day_names.values(), ordered=True)
+weekly_data.sort_values('day_of_week', inplace=True)
+
+# Define color map for the different collision types
+color_map = {
+    'total_collisions': 'pink',  # pink for total collisions
+    'serious_collisions': 'red',  # Red for serious collisions
+    'collisions_with_pedestrians_cyclists': 'green'  # Green for collisions involving pedestrians/cyclists
+}
+
+fig = px.bar(weekly_data, 
+             x='day_of_week', 
+             y=['total_collisions', 'serious_collisions', 'collisions_with_pedestrians_cyclists'],
+             barmode='group', 
+             title='Weekly Collision Data',
+             color_discrete_map=color_map)
+
+fig.update_layout(
+    xaxis_title='Day of the Week',
+    yaxis_title='Number of Collisions',
+    legend_title='Collision Type'
+)
+```
+
+```{python}
+#| title: Hourly Collisions
+import pandas as pd
+import plotly.express as px
+
+# Ensure 'date/time' is a datetime type
+data['date/time'] = pd.to_datetime(data['date/time'], errors='coerce')
+
+# Extract the hour from 'date/time'
+data['hour_of_day'] = data['date/time'].dt.hour
+
+# Group by hour of day and sum the collision types
+hourly_data = data.groupby('hour_of_day').agg({
+    'total_collisions': 'sum',
+    'serious_collisions': 'sum',
+    'collisions_with_pedestrians_cyclists': 'sum'
+}).reset_index()
+
+# Ensure hours are sorted (though they should be from the groupby)
+hourly_data.sort_values('hour_of_day', inplace=True)
+# Define color map for the different collision types
+color_map = {
+    'total_collisions': 'navy',  # Navy for total collisions
+    'serious_collisions': 'crimson',  # Crimson for serious collisions
+    'collisions_with_pedestrians_cyclists': 'forestgreen'  # Forest green for collisions with pedestrians/cyclists
+}
+
+fig = px.bar(hourly_data, 
+             x='hour_of_day', 
+             y=['total_collisions', 'serious_collisions', 'collisions_with_pedestrians_cyclists'],
+             barmode='group', 
+             title='Hourly Collision Data Across All Days',
+             color_discrete_map=color_map)
+
+fig.update_layout(
+    xaxis_title='Hour of the Day',
+    xaxis=dict(tickmode='linear', tick0=0, dtick=1),  # Ensure hourly ticks
+    yaxis_title='Number of Collisions',
+    legend_title='Collision Type'
+)
+```
+
+```{python}
+#| title: Across Seasons
+import pandas as pd
+import plotly.express as px
+
+def month_to_season(month):
+    if 3 <= month <= 5:
+        return 'Spring'
+    elif 6 <= month <= 8:
+        return 'Summer'
+    elif 9 <= month <= 11:
+        return 'Fall'
+    else:
+        return 'Winter'  # December to February
+
+# Assuming data has been loaded and 'date/time' converted to datetime
+data['date/time'] = pd.to_datetime(data['date/time'], errors='coerce')
+
+# Create a 'Season' column based on the month of 'date/time'
+data['Season'] = data['date/time'].dt.month.apply(month_to_season)
+
+# Group by 'Season' and aggregate collision data
+seasonal_data = data.groupby('Season').agg({
+    'total_collisions': 'sum',
+    'serious_collisions': 'sum',
+    'collisions_with_pedestrians_cyclists': 'sum'
+}).reset_index()
+
+# Order the seasons logically for presentation
+season_order = ['Winter', 'Spring', 'Summer', 'Fall']
+seasonal_data['Season'] = pd.Categorical(seasonal_data['Season'], categories=season_order, ordered=True)
+seasonal_data = seasonal_data.sort_values('Season')
+
+# Define color map for the different collision types
+color_map = {
+    'total_collisions': 'navy',
+    'serious_collisions': 'crimson',
+    'collisions_with_pedestrians_cyclists': 'forestgreen'
+}
+
+# Plotting with custom colors
+fig = px.bar(seasonal_data, 
+             x='Season', 
+             y=['total_collisions', 'serious_collisions', 'collisions_with_pedestrians_cyclists'],
+             barmode='group', 
+             title='Seasonal Collision Data Across All Years',
+             color_discrete_map=color_map)
+
+fig.update_layout(
+    xaxis_title='Season',
+    yaxis_title='Number of Collisions',
+    legend_title='Collision Type'
+)
+```
+
+# Dangerous Areas Clusters Maps
+
+## Row {.tabset}
+
+```{python}
+#| title: Dangerous Areas
+import pandas as pd
+from sklearn.cluster import DBSCAN
+import folium
+import os
+from folium.plugins import FastMarkerCluster
+# Assuming 'serious' collisions are those with injuries or fatalities
+serious = data[(data['number_of_persons_injured'] > 0) | (data['number_of_persons_killed'] > 0)].copy()
+
+# Prepare data for clustering
+serious['latitude'] = pd.to_numeric(serious['latitude'], errors='coerce')
+serious['longitude'] = pd.to_numeric(serious['longitude'], errors='coerce')
+serious.dropna(subset=['latitude', 'longitude'], inplace=True)  # Remove any rows without valid lat/long data
+
+# DBSCAN Clustering
+dbscan_model = DBSCAN(eps=0.0008, min_samples=50, metric="euclidean")
+serious['cluster'] = dbscan_model.fit_predict(serious[['latitude', 'longitude']])
+
+# Calculate cluster danger scores based on injuries and fatalities
+SERIOUS_CLUSTERS = 200  # number of most dangerous clusters to identify
+FATALITY_MULTIPLE = 10  # weight assigned to fatalities relative to injuries
+
+serious['injured'] = serious['number_of_persons_injured']
+serious['killed'] = serious['number_of_persons_killed']
+cluster_groupby = serious[serious['cluster'] > -1].groupby('cluster')[['injured', 'killed']].sum()
+cluster_groupby['danger'] = cluster_groupby['injured'] + (cluster_groupby['killed'] * FATALITY_MULTIPLE)
+top_clusters = cluster_groupby.nlargest(SERIOUS_CLUSTERS, 'danger').index.tolist()
+
+# Create a Folium map centered around an average location
+map_center = [serious['latitude'].mean(), serious['longitude'].mean()]
+cluster_map = folium.Map(location=map_center, zoom_start=12, tiles='OpenStreetMap')
+
+# Select data for mapping and ensure data is appropriate for passing to Folium
+cluster_mask = serious['cluster'].isin(top_clusters)
+fields_to_use = ['latitude', 'longitude', 'crash_date', 'crash_time', 'injured', 'killed', 'cluster']
+cluster_map_data = serious.loc[cluster_mask, fields_to_use]
+
+# Converting date and time to string for JavaScript
+cluster_map_data['crash_date'] = cluster_map_data['crash_date'].astype(str)
+cluster_map_data['crash_time'] = cluster_map_data['crash_time'].astype(str)
+
+# JavaScript callback for custom markers
+js_callback = """
+function (row) {
+    var icon = L.AwesomeMarkers.icon({
+        icon: 'info-sign',
+        markerColor: 'red',
+        prefix: 'glyphicon'
+    });
+    var marker = L.marker(new L.LatLng(row[0], row[1]), {icon: icon});
+    var popup = L.popup().setContent('<b>Date:</b> ' + row[2] + '<br><b>Time:</b> ' + row[3] + '<br><b>Injured:</b> ' + row[4] + '<br><b>Killed:</b> ' + row[5] + '<br><b>Cluster ID:</b> ' + row[6]);
+    marker.bindPopup(popup);
+    return marker;
+}
+"""
+folium.plugins.FastMarkerCluster(data=cluster_map_data.values.tolist(), callback=js_callback).add_to(cluster_map)
+
+cluster_map
+```
+
+```{python}
+#| title: Dangerous Areas for Pedestrians and Cyclists
+import pandas as pd
+from sklearn.cluster import DBSCAN
+import folium
+import os
+
+# Load your dataset if not already loaded
+# data = pd.read_csv('path_to_your_file.csv')  # Uncomment and set path if needed
+
+# Define non-motorist collisions based on specific conditions
+non_motorist = data[
+    (data['number_of_pedestrians_injured'] > 0) |
+    (data['number_of_cyclist_injured'] > 0) |
+    (data['number_of_pedestrians_killed'] > 0) |
+    (data['number_of_cyclist_killed'] > 0)
+].copy()
+
+# Prepare latitude and longitude for clustering
+non_motorist['latitude'] = pd.to_numeric(non_motorist['latitude'], errors='coerce')
+non_motorist['longitude'] = pd.to_numeric(non_motorist['longitude'], errors='coerce')
+non_motorist.dropna(subset=['latitude', 'longitude'], inplace=True)
+
+# Parameters for DBSCAN
+eps = 0.0005  # Smaller neighborhood size
+min_samples = 5  # Minimum samples in a neighborhood to form a cluster
+
+# Perform DBSCAN clustering
+dbscan_model = DBSCAN(eps=eps, min_samples=min_samples, metric="euclidean")
+non_motorist['cluster'] = dbscan_model.fit_predict(non_motorist[['latitude', 'longitude']])
+
+# Calculate danger scores based on the injuries and fatalities of non-motorists
+FATALITY_MULTIPLE = 10  # Weight assigned to fatalities relative to injuries
+non_motorist['danger'] = (
+    non_motorist['number_of_pedestrians_injured'] +
+    non_motorist['number_of_cyclist_injured'] +
+    (non_motorist['number_of_pedestrians_killed'] * FATALITY_MULTIPLE) +
+    (non_motorist['number_of_cyclist_killed'] * FATALITY_MULTIPLE)
+)
+
+# Sum danger scores within clusters and identify top clusters
+cluster_groupby = non_motorist[non_motorist['cluster'] > -1].groupby('cluster')['danger'].sum()
+top_clusters = cluster_groupby.nlargest(200).index.tolist()
+
+# Select data for visualization
+cluster_mask = non_motorist['cluster'].isin(top_clusters)
+fields_to_use = ['latitude', 'longitude', 'crash_date', 'crash_time', 'number_of_pedestrians_injured', 'number_of_cyclist_injured', 'number_of_pedestrians_killed', 'number_of_cyclist_killed', 'cluster']
+cluster_map_data = non_motorist.loc[cluster_mask, fields_to_use]
+
+# Convert datetime fields to string for JavaScript compatibility
+cluster_map_data['crash_date'] = cluster_map_data['crash_date'].astype(str)
+cluster_map_data['crash_time'] = cluster_map_data['crash_time'].astype(str)
+
+# Create a Folium map centered around the average location
+NYC_MAP_CENTER = [non_motorist['latitude'].mean(), non_motorist['longitude'].mean()]
+nm_cluster_map = folium.Map(location=NYC_MAP_CENTER, zoom_start=12, tiles='OpenStreetMap')
+
+# JavaScript callback for custom markers in Folium
+js_callback = """
+function (row) {
+    var icon = L.AwesomeMarkers.icon({
+        icon: 'info-sign',
+        markerColor: 'red',
+        prefix: 'glyphicon'
+    });
+    var marker = L.marker(new L.LatLng(row[0], row[1]), {icon: icon});
+    var popup = L.popup().setContent('<b>Date:</b> ' + row[2] + '<br><b>Time:</b> ' + row[3] + '<br><b>Pedestrians Injured:</b> ' + row[4] + '<br><b>Cyclists Injured:</b> ' + row[5] + '<br><b>Pedestrians Killed:</b> ' + row[6] + '<br><b>Cyclists Killed:</b> ' + row[7] + '<br><b>Cluster ID:</b> ' + row[8]);
+    marker.bindPopup(popup);
+    return marker;
+}
+"""
+folium.plugins.FastMarkerCluster(data=cluster_map_data.values.tolist(), callback=js_callback).add_to(nm_cluster_map)
+nm_cluster_map
+```
+
+```{python}
+#| title: Dangerous Single Points
+import pandas as pd
+import folium
+import os
+
+data = data.copy()
+# Assuming 'data' is your DataFrame and is already loaded
+# Convert latitude and longitude columns to numeric types
+# Convert latitude and longitude columns to numeric types safely
+data.loc[:, 'latitude'] = pd.to_numeric(data['latitude'], errors='coerce')
+data.loc[:, 'longitude'] = pd.to_numeric(data['longitude'], errors='coerce')
+
+# Sum up injuries and fatalities using .loc for safe assignment
+data.loc[:, 'injured'] = data['number_of_persons_injured'] + data['number_of_pedestrians_injured'] + \
+                         data['number_of_cyclist_injured'] + data['number_of_motorist_injured']
+data.loc[:, 'killed'] = data['number_of_persons_killed'] + data['number_of_pedestrians_killed'] + \
+                        data['number_of_cyclist_killed'] + data['number_of_motorist_killed']
+
+# Proceed with the rest of your code
+
+
+MOST_SERIOUS = 250  # number of most dangerous locations to identify
+FATALITY_MULTIPLE = 10  # weight assigned to fatalities relative to injuries
+
+
+
+# Group data by location and sum the results
+dangerous = data.groupby(['latitude', 'longitude'])[['injured', 'killed']].sum()
+dangerous['danger'] = dangerous['injured'] + (dangerous['killed'] * FATALITY_MULTIPLE)
+dangerous = dangerous.reset_index()
+most_dangerous = dangerous.sort_values(by="danger", ascending=False).head(MOST_SERIOUS)
+
+# Create Folium map
+NYC_MAP_CENTER = (40.73, -73.92)  # center of the map
+danger_map = folium.Map(location=NYC_MAP_CENTER, zoom_start=10, tiles='OpenStreetMap')
+
+# Add markers to the map
+for index, row in most_dangerous.iterrows():
+    info_str = f"INJURED: {int(row['injured'])}\nKILLED: {int(row['killed'])}"
+    folium.Marker(
+        location=(row['latitude'], row['longitude']),
+        icon=folium.Icon(color="red", icon="fa-exclamation-triangle", prefix='fa'),
+        tooltip=info_str,
+        popup=info_str
+    ).add_to(danger_map)
+danger_map
+```
+
+```{python}
+#| title: Dangerous Single Points for Pedestrians and Cyclists
+# Assuming 'data' is already loaded and has columns for pedestrian and cyclist injuries and fatalities
+data = data1.copy()
+data['pedestrian_injured'] = pd.to_numeric(data['number_of_pedestrians_injured'], errors='coerce').fillna(0).astype(int)
+data['cyclist_injured'] = pd.to_numeric(data['number_of_cyclist_injured'], errors='coerce').fillna(0).astype(int)
+data['pedestrian_killed'] = pd.to_numeric(data['number_of_pedestrians_killed'], errors='coerce').fillna(0).astype(int)
+data['cyclist_killed'] = pd.to_numeric(data['number_of_cyclist_killed'], errors='coerce').fillna(0).astype(int)
+
+MOST_NON_MOTORIST_SERIOUS = 250  # number of most dangerous locations to identify
+FATALITY_MULTIPLE = 10  # weight assigned to fatalities relative to injuries
+
+# Group data by location and sum the results for non-motorists
+dangerous_non_motor = data.groupby(['latitude', 'longitude'])[
+    ['pedestrian_injured', 'cyclist_injured', 'pedestrian_killed', 'cyclist_killed']
+].sum()
+dangerous_non_motor['danger'] = (
+    dangerous_non_motor['pedestrian_injured']
+    + dangerous_non_motor['cyclist_injured']
+    + (dangerous_non_motor['pedestrian_killed'] * FATALITY_MULTIPLE)
+    + (dangerous_non_motor['cyclist_killed'] * FATALITY_MULTIPLE)
+)
+dangerous_non_motor = dangerous_non_motor.reset_index()
+most_dangerous_non_motor = dangerous_non_motor.sort_values(
+    by="danger", ascending=False
+).head(MOST_NON_MOTORIST_SERIOUS)
+
+# Create Folium map
+NYC_MAP_CENTER = (40.73, -73.92)
+danger_non_motor_map = folium.Map(
+    location=NYC_MAP_CENTER, zoom_start=10, tiles="OpenStreetMap"
+)
+
+# Add markers to the map
+for index, row in most_dangerous_non_motor.iterrows():
+    info_str = f"PEDESTRIAN INJURED: {int(row['pedestrian_injured'])}\nCYCLIST INJURED: {int(row['cyclist_injured'])}\nPEDESTRIAN KILLED: {int(row['pedestrian_killed'])}\nCYCLIST KILLED: {int(row['cyclist_killed'])}"
+    folium.Marker(
+        location=(row['latitude'], row['longitude']),
+        icon=folium.Icon(color="red", icon="exclamation-triangle", prefix="fa"),
+        tooltip=info_str,
+        popup=info_str
+    ).add_to(danger_non_motor_map)
+danger_non_motor_map
+```
+
+# Hotspots
+
+## Row {.tabset}
+
+```{python}
+#| title: Fatal Collisions
+import pandas as pd
+import folium
+import os
+from folium.plugins import FastMarkerCluster
+
+data = data1.copy()  # Assuming data is already loaded into 'data'
+
+# Define fatal collisions as those with at least one fatality and valid latitude and longitude
+fatal = data[(data['number_of_persons_killed'] > 0) & (data['latitude'].notna()) & (data['longitude'].notna())]
+
+# Prepare data for the map
+map_data = fatal[['latitude', 'longitude', 'crash_date', 'crash_time', 'number_of_persons_injured', 'number_of_persons_killed']].copy()
+map_data.loc[:, 'crash_date'] = map_data['crash_date'].astype(str)  # Convert dates to string for JavaScript compatibility
+map_data.loc[:, 'crash_time'] = map_data['crash_time'].astype(str)  # Convert times to string for JavaScript compatibility
+
+# Create a Folium map centered around New York City
+NYC_MAP_CENTER = [40.7128, -74.0060]  # NYC coordinates for centering the map
+fatal_map = folium.Map(location=NYC_MAP_CENTER, zoom_start=10, tiles='OpenStreetMap')
+
+# JavaScript callback for custom markers
+js_callback = """
+function (row) {
+    var icon = L.AwesomeMarkers.icon({
+        icon: 'fa-exclamation',
+        iconColor: 'white',
+        markerColor: 'red',
+        prefix: 'fa'
+    });
+    var marker = L.marker(new L.LatLng(row[0], row[1]), {icon: icon});
+    var popup = L.popup({maxWidth: '300'}).setContent('<b>Date:</b> ' + row[2] + '<br><b>Time:</b> ' + row[3] + '<br><b>People Injured:</b> ' + row[4] + '<br><b>People Killed:</b> ' + row[5]);
+    marker.bindPopup(popup);
+    return marker;
+}
+"""
+# Add markers to the map using FastMarkerCluster for efficiency
+FastMarkerCluster(data=map_data.values.tolist(), callback=js_callback).add_to(fatal_map)
+fatal_map
+```
+
+```{python}
+#| title: Collisions with Pedestrians and Cyclists 2018 through 2023
+import pandas as pd
+import folium
+from folium.plugins import FastMarkerCluster
+import os
+from datetime import datetime
+
+data=data1.copy()
+# Assuming data is already loaded into 'data'
+# Filter data for the years 2018 through 2021
+start = datetime(year=2018, month=1, day=1)
+end = datetime(year=2024, month=1, day=1)
+data['crash_date'] = pd.to_datetime(data['crash_date'])  # Ensure 'crash_date' is datetime type
+crashes_18_21 = data[data['crash_date'].between(start, end, inclusive='left')]
+
+# Define collisions involving pedestrians and cyclists
+non_motorist_18_21 = crashes_18_21[
+    (data['number_of_pedestrians_injured'] > 0) |
+    (data['number_of_cyclist_injured'] > 0) |
+    (data['number_of_pedestrians_killed'] > 0) |
+    (data['number_of_cyclist_killed'] > 0)
+]
+
+# Prepare map data
+non_motor_map_data = non_motorist_18_21[[
+    'latitude', 'longitude', 'crash_date', 'crash_time',
+    'number_of_persons_injured', 'number_of_pedestrians_injured', 'number_of_cyclist_injured',
+    'number_of_persons_killed', 'number_of_pedestrians_killed', 'number_of_cyclist_killed'
+]]
+non_motor_map_data['crash_date'] = non_motor_map_data['crash_date'].dt.strftime('%Y-%m-%d')  # Format date
+non_motor_map_data['crash_time'] = non_motor_map_data['crash_time'].astype(str)  # Ensure time is string
+
+# Create a Folium map centered around New York City
+NYC_MAP_CENTER = [40.7128, -74.0060]  # NYC coordinates for centering the map
+non_motor_map_18_21 = folium.Map(location=NYC_MAP_CENTER, zoom_start=12, tiles='OpenStreetMap')
+
+# JavaScript callback for custom markers
+js_callback = """
+function (row) {
+    var icon = L.AwesomeMarkers.icon({
+        icon: 'fa-exclamation',
+        iconColor: 'white',
+        markerColor: 'red',
+        prefix: 'fa'
+    });
+    var marker = L.marker(new L.LatLng(row[0], row[1]), {icon: icon});
+    var popup = L.popup({maxWidth: '300'}).setContent('<b>Date:</b> ' + row[2] + '<br><b>Time:</b> ' + row[3] + '<br><b>Total Injured:</b> ' + row[4] + '<br><b>Pedestrians Injured:</b> ' + row[5] + '<br><b>Cyclists Injured:</b> ' + row[6] + '<br><b>Total Killed:</b> ' + row[7] + '<br><b>Pedestrians Killed:</b> ' + row[8] + '<br><b>Cyclists Killed:</b> ' + row[9]);
+    marker.bindPopup(popup);
+    return marker;
+}
+"""
+folium.plugins.FastMarkerCluster(data=non_motor_map_data.values.tolist(), callback=js_callback).add_to(non_motor_map_18_21)
+non_motor_map_18_21
+```
+
+```{python}
+#| title: Collisions with Pedestrians and Cyclists in 2024(Latest)
+import pandas as pd
+import folium
+from folium.plugins import FastMarkerCluster
+import os
+from datetime import datetime
+data=data1.copy()
+# Assuming data is already loaded into 'data'
+# Filter data for the years 2022 through 2024
+start = datetime(year=2024, month=1, day=1)
+end = datetime(year=2025, month=1, day=1)  # Include up to the end of 2024
+data['crash_date'] = pd.to_datetime(data['crash_date'])  # Ensure 'crash_date' is datetime type
+crashes_22_24 = data[data['crash_date'].between(start, end, inclusive='left')]
+
+# Define collisions involving pedestrians and cyclists
+non_motorist_22_24 = crashes_22_24[
+    (data['number_of_pedestrians_injured'] > 0) |
+    (data['number_of_cyclist_injured'] > 0) |
+    (data['number_of_pedestrians_killed'] > 0) |
+    (data['number_of_cyclist_killed'] > 0)
+]
+
+# Prepare map data
+non_motor_map_data = non_motorist_22_24[[
+    'latitude', 'longitude', 'crash_date', 'crash_time',
+    'number_of_persons_injured', 'number_of_pedestrians_injured', 'number_of_cyclist_injured',
+    'number_of_persons_killed', 'number_of_pedestrians_killed', 'number_of_cyclist_killed'
+]]
+non_motor_map_data['crash_date'] = non_motor_map_data['crash_date'].dt.strftime('%Y-%m-%d')  # Format date
+non_motor_map_data['crash_time'] = non_motor_map_data['crash_time'].astype(str)  # Ensure time is string
+
+# Create a Folium map centered around New York City
+NYC_MAP_CENTER = [40.7128, -74.0060]  # NYC coordinates for centering the map
+non_motor_map_22_24 = folium.Map(location=NYC_MAP_CENTER, zoom_start=12, tiles='OpenStreetMap')
+
+# JavaScript callback for custom markers
+js_callback = """
+function (row) {
+    var icon = L.AwesomeMarkers.icon({
+        icon: 'fa-exclamation',
+        iconColor: 'white',
+        markerColor: 'red',
+        prefix: 'fa'
+    });
+    var marker = L.marker(new L.LatLng(row[0], row[1]), {icon: icon});
+    var popup = L.popup({maxWidth: '300'}).setContent('<b>Date:</b> ' + row[2] + '<br><b>Time:</b> ' + row[3] + '<br><b>Total Injured:</b> ' + row[4] + '<br><b>Pedestrians Injured:</b> ' + row[5] + '<br><b>Cyclists Injured:</b> ' + row[6] + '<br><b>Total Killed:</b> ' + row[7] + '<br><b>Pedestrians Killed:</b> ' + row[8] + '<br><b>Cyclists Killed:</b> ' + row[9]);
+    marker.bindPopup(popup);
+    return marker;
+}
+"""
+folium.plugins.FastMarkerCluster(data=non_motor_map_data.values.tolist(), callback=js_callback).add_to(non_motor_map_22_24)
+non_motor_map_22_24
+```
+
+```{python}
+#| title: Serious Collisions from 2018 to 2023
+import pandas as pd
+import folium
+from folium.plugins import FastMarkerCluster
+import os
+from datetime import datetime
+
+data=data1.copy()
+# Assuming data is already loaded into 'data'
+# Define the date range for 2018 through 2021
+start = datetime(year=2018, month=1, day=1)
+end = datetime(year=2023, month=1, day=1)  # Include up to the end of 2021
+data['crash_date'] = pd.to_datetime(data['crash_date'])  # Ensure 'crash_date' is datetime type
+crashes_18_21 = data[data['crash_date'].between(start, end, inclusive='left')]
+
+# Define serious collisions as those with injuries or fatalities
+serious_18_21 = crashes_18_21[
+    (data['number_of_persons_injured'] > 0) | (data['number_of_persons_killed'] > 0)
+]
+
+# Prepare map data
+map_data = serious_18_21[[
+    'latitude', 'longitude', 'crash_date', 'crash_time',
+    'number_of_persons_injured', 'number_of_persons_killed'
+]]
+map_data['crash_date'] = map_data['crash_date'].dt.strftime('%Y-%m-%d')  # Format date
+map_data['crash_time'] = map_data['crash_time'].astype(str)  # Ensure time is string
+
+# Create a Folium map centered around New York City
+NYC_MAP_CENTER = [40.7128, -74.0060]  # NYC coordinates for centering the map
+serious_map_18_21 = folium.Map(location=NYC_MAP_CENTER, zoom_start=12, tiles='OpenStreetMap')
+
+# JavaScript callback for custom markers
+js_callback = """
+function (row) {
+    var icon = L.AwesomeMarkers.icon({
+        icon: 'fa-exclamation',
+        iconColor: 'white',
+        markerColor: 'red',
+        prefix: 'fa'
+    });
+    var marker = L.marker(new L.LatLng(row[0], row[1]), {icon: icon});
+    var popup = L.popup({maxWidth: '300'}).setContent('<b>Date:</b> ' + row[2] + '<br><b>Time:</b> ' + row[3] + '<br><b>People Injured:</b> ' + row[4] + '<br><b>People Killed:</b> ' + row[5]);
+    marker.bindPopup(popup);
+    return marker;
+}
+"""
+folium.plugins.FastMarkerCluster(data=map_data.values.tolist(), callback=js_callback).add_to(serious_map_18_21)
+
+serious_map_18_21
+```
+
+```{python}
+#| title: Serious Collisions in 2024(Latest)
+import pandas as pd
+import folium
+from folium.plugins import FastMarkerCluster
+import os
+from datetime import datetime
+
+data=data1.copy()
+# Assuming data is already loaded into 'data'
+# Define the date range for 2022 through 2024
+start = datetime(year=2024, month=1, day=1)
+end = datetime(year=2025, month=1, day=1)  # Include up to the end of 2024
+data['crash_date'] = pd.to_datetime(data['crash_date'])  # Ensure 'crash_date' is datetime type
+crashes_22_24 = data[data['crash_date'].between(start, end, inclusive='left')]
+
+# Define serious collisions as those with injuries or fatalities
+serious_22_24 = crashes_22_24[
+    (data['number_of_persons_injured'] > 0) | (data['number_of_persons_killed'] > 0)
+]
+
+# Prepare map data
+map_data = serious_22_24[[
+    'latitude', 'longitude', 'crash_date', 'crash_time',
+    'number_of_persons_injured', 'number_of_persons_killed'
+]]
+map_data['crash_date'] = map_data['crash_date'].dt.strftime('%Y-%m-%d')  # Format date
+map_data['crash_time'] = map_data['crash_time'].astype(str)  # Ensure time is string
+
+# Create a Folium map centered around New York City, or adjust the center as needed
+NYC_MAP_CENTER = [40.7128, -74.0060]  # Coordinates for centering the map
+serious_map_22_24 = folium.Map(location=NYC_MAP_CENTER, zoom_start=12, tiles='OpenStreetMap')
+
+# JavaScript callback for custom markers
+js_callback = """
+function (row) {
+    var icon = L.AwesomeMarkers.icon({
+        icon: 'fa-exclamation',
+        iconColor: 'white',
+        markerColor: 'red',
+        prefix: 'fa'
+    });
+    var marker = L.marker(new L.LatLng(row[0], row[1]), {icon: icon});
+    var popup = L.popup({maxWidth: '300'}).setContent('<b>Date:</b> ' + row[2] + '<br><b>Time:</b> ' + row[3] + '<br><b>People Injured:</b> ' + row[4] + '<br><b>People Killed:</b> ' + row[5]);
+    marker.bindPopup(popup);
+    return marker;
+}
+"""
+folium.plugins.FastMarkerCluster(data=map_data.values.tolist(), callback=js_callback).add_to(serious_map_22_24)
+serious_map_22_24
+```
+
+Serious collisions, including collisions where pedestrians or cyclists are injured or killed is fairly widespread throughout NYC.
+ Clustering can be used to reveal multi-block areas with elevated injuries and deaths that would be missed by tracking high-collision intersections.
+ The 105th and 109th precincts in Queens and the 75th precinct in Brooklyn lead the city in total number of collisions.
+ Areas with higher numbers of collisions tend to have higher numbers injuries or deaths (motorist, pedestrian, and cyclist).
+ However pedestrian and cyclist injuries and deaths are not as strongly linked to the number of vehicle collisions.
+ Surprisingly, pedestrian and cyclist injuries and deaths do not seem to correspond to density, suggesting that other factors like street design, signage, and traffic enforcement are important to reducing injuries and deaths.
+ North Queens, much of Brooklyn, and midtown Manhattan stand out as having high numbers of pedestrian and cyclist injuries and deaths.
+
